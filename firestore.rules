@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() { return request.auth != null; }
+    function existing() { return resource.data; }
+    function incoming() { return request.resource.data; }
+    
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'role', 'createdAt']) &&
+             data.email is string && data.email.size() <= 256 &&
+             data.role is string && data.role.size() <= 20 &&
+             (data.role == 'artisan' || data.role == 'customer') &&
+             data.createdAt is number;
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['artisanId', 'titleEn', 'price', 'createdAt']) &&
+             data.artisanId is string && data.artisanId.size() <= 128 &&
+             data.titleEn is string && data.titleEn.size() <= 150 &&
+             data.price is number &&
+             data.createdAt is number &&
+             data.artisanId == request.auth.uid; // Identity Integrity
+    }
+
+    function isValidEnquiry(data) {
+      return data.keys().hasAll(['productId', 'buyerId', 'artisanId', 'status', 'createdAt']) &&
+             data.productId is string && data.productId.size() <= 128 &&
+             data.buyerId is string && data.buyerId.size() <= 128 &&
+             data.artisanId is string && data.artisanId.size() <= 128 &&
+             data.status is string && data.status.size() <= 20 &&
+             data.createdAt is number &&
+             data.buyerId == request.auth.uid; // Identity Integrity
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId);
+      allow list: if false; // Users shouldn't list all users
+      
+      allow create: if isSignedIn() && 
+                    isValidId(userId) && 
+                    userId == request.auth.uid &&
+                    isValidUser(incoming());
+                    
+      allow update: if isSignedIn() && 
+                    isValidId(userId) && 
+                    userId == request.auth.uid &&
+                    isValidUser(incoming()) &&
+                    incoming().createdAt == existing().createdAt;
+    }
+
+    match /products/{productId} {
+      allow read: if isSignedIn() && isValidId(productId);
+      allow list: if isSignedIn(); // All authenticated users can list products
+      
+      allow create: if isSignedIn() && 
+                    isValidId(productId) &&
+                    isValidProduct(incoming());
+                    
+      allow update: if isSignedIn() && 
+                    isValidId(productId) &&
+                    existing().artisanId == request.auth.uid &&
+                    isValidProduct(incoming()) &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().artisanId == existing().artisanId; // Immortal field
+                    
+      allow delete: if isSignedIn() && 
+                    isValidId(productId) &&
+                    existing().artisanId == request.auth.uid;
+    }
+
+    match /enquiries/{enquiryId} {
+      allow read: if isSignedIn() && isValidId(enquiryId) && 
+                  (existing().buyerId == request.auth.uid || existing().artisanId == request.auth.uid);
+                  
+      allow list: if isSignedIn() && 
+                  (resource.data.buyerId == request.auth.uid || resource.data.artisanId == request.auth.uid);
+                  
+      allow create: if isSignedIn() && 
+                    isValidId(enquiryId) &&
+                    isValidEnquiry(incoming()) &&
+                    exists(/databases/$(database)/documents/products/$(incoming().productId)); // Ensure product exists
+                    
+      allow update: if isSignedIn() && 
+                    isValidId(enquiryId) &&
+                    (existing().buyerId == request.auth.uid || existing().artisanId == request.auth.uid) &&
+                    isValidEnquiry(incoming()) &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().buyerId == existing().buyerId &&
+                    incoming().artisanId == existing().artisanId &&
+                    incoming().productId == existing().productId;
+    }
+  }
+}

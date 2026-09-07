@@ -1,0 +1,119 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user profile in the application",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "role": {
+          "type": "string",
+          "enum": ["artisan", "customer"]
+        },
+        "createdAt": {
+          "type": "number"
+        }
+      },
+      "required": ["email", "role", "createdAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "A handcrafted product listed by an artisan",
+      "type": "object",
+      "properties": {
+        "artisanId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "artisanName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "titleEn": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "titleHi": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "desc": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "price": {
+          "type": "number"
+        },
+        "imageUrl": {
+          "type": "string",
+          "maxLength": 1000000
+        },
+        "score": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "number"
+        }
+      },
+      "required": ["artisanId", "titleEn", "price", "createdAt"]
+    },
+    "Enquiry": {
+      "title": "Enquiry",
+      "description": "A buyer enquiry for a product",
+      "type": "object",
+      "properties": {
+        "productId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "buyerId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "artisanId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "responded", "closed"]
+        },
+        "createdAt": {
+          "type": "number"
+        }
+      },
+      "required": ["productId", "buyerId", "artisanId", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "User profiles"
+    },
+    "products/{productId}": {
+      "schema": {
+        "$ref": "#/entities/Product"
+      },
+      "description": "Products listed in the marketplace"
+    },
+    "enquiries/{enquiryId}": {
+      "schema": {
+        "$ref": "#/entities/Enquiry"
+      },
+      "description": "Enquiries made by buyers"
+    }
+  }
+}
