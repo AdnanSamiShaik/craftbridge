@@ -10,6 +10,12 @@ export default defineConfig(() => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
+      // Keep React and React DOM on the same module instance. Without this,
+      // Vite can prebundle duplicate React copies and hooks lose their dispatcher.
+      dedupe: ['react', 'react-dom'],
+    },
+    optimizeDeps: {
+      include: ['react', 'react-dom', 'react-router-dom'],
     },
     server: {
       // This app is served through the Express middleware server. The preview
