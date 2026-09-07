@@ -1,119 +1,60 @@
 {
-  "entities": {
-    "User": {
-      "title": "User",
-      "description": "A user profile in the application",
-      "type": "object",
-      "properties": {
-        "email": {
-          "type": "string",
-          "maxLength": 256
-        },
-        "name": {
-          "type": "string",
-          "maxLength": 100
-        },
-        "role": {
-          "type": "string",
-          "enum": ["artisan", "customer"]
-        },
-        "createdAt": {
-          "type": "number"
-        }
+  "description": "Blueprint for Craft Bridge marketplace",
+  "collections": [
+    {
+      "name": "users",
+      "description": "User accounts for artisans, customers, and buyers.",
+      "securityRules": {
+        "read": "request.auth != null && (request.auth.uid == documentId || resource.data.role == 'artisan')",
+        "create": "request.auth != null && request.auth.uid == documentId",
+        "update": "request.auth != null && request.auth.uid == documentId",
+        "delete": "false"
       },
-      "required": ["email", "role", "createdAt"]
+      "indexes": [
+        { "fields": ["phone"], "queryType": "EQUALITY" }
+      ]
     },
-    "Product": {
-      "title": "Product",
-      "description": "A handcrafted product listed by an artisan",
-      "type": "object",
-      "properties": {
-        "artisanId": {
-          "type": "string",
-          "maxLength": 128
-        },
-        "artisanName": {
-          "type": "string",
-          "maxLength": 100
-        },
-        "titleEn": {
-          "type": "string",
-          "maxLength": 150
-        },
-        "titleHi": {
-          "type": "string",
-          "maxLength": 150
-        },
-        "desc": {
-          "type": "string",
-          "maxLength": 1000
-        },
-        "price": {
-          "type": "number"
-        },
-        "imageUrl": {
-          "type": "string",
-          "maxLength": 1000000
-        },
-        "score": {
-          "type": "number"
-        },
-        "createdAt": {
-          "type": "number"
-        }
+    {
+      "name": "products",
+      "description": "Handcrafted products added by artisans.",
+      "securityRules": {
+        "read": "request.auth != null",
+        "create": "request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'artisan'",
+        "update": "request.auth != null && resource.data.artisanId == request.auth.uid",
+        "delete": "request.auth != null && resource.data.artisanId == request.auth.uid"
       },
-      "required": ["artisanId", "titleEn", "price", "createdAt"]
+      "indexes": [
+        { "fields": ["artisanId"], "queryType": "EQUALITY" },
+        { "fields": ["category"], "queryType": "EQUALITY" }
+      ]
     },
-    "Enquiry": {
-      "title": "Enquiry",
-      "description": "A buyer enquiry for a product",
-      "type": "object",
-      "properties": {
-        "productId": {
-          "type": "string",
-          "maxLength": 128
-        },
-        "buyerId": {
-          "type": "string",
-          "maxLength": 128
-        },
-        "artisanId": {
-          "type": "string",
-          "maxLength": 128
-        },
-        "message": {
-          "type": "string",
-          "maxLength": 500
-        },
-        "status": {
-          "type": "string",
-          "enum": ["pending", "responded", "closed"]
-        },
-        "createdAt": {
-          "type": "number"
-        }
+    {
+      "name": "enquiries",
+      "description": "Enquiries made by buyers for artisan products.",
+      "securityRules": {
+        "read": "request.auth != null && (resource.data.buyerId == request.auth.uid || resource.data.artisanId == request.auth.uid)",
+        "create": "request.auth != null",
+        "update": "request.auth != null && (resource.data.buyerId == request.auth.uid || resource.data.artisanId == request.auth.uid)",
+        "delete": "false"
       },
-      "required": ["productId", "buyerId", "artisanId", "status", "createdAt"]
+      "indexes": [
+        { "fields": ["buyerId"], "queryType": "EQUALITY" },
+        { "fields": ["artisanId", "createdAt"], "queryType": "ORDERED" }
+      ]
+    },
+    {
+      "name": "orders",
+      "description": "Customer orders.",
+      "securityRules": {
+        "read": "request.auth != null && (resource.data.customerId == request.auth.uid || resource.data.artisanId == request.auth.uid)",
+        "create": "request.auth != null && resource.data.customerId == request.auth.uid",
+        "update": "request.auth != null && (resource.data.customerId == request.auth.uid || resource.data.artisanId == request.auth.uid)",
+        "delete": "false"
+      },
+      "indexes": [
+        { "fields": ["customerId"], "queryType": "EQUALITY" },
+        { "fields": ["artisanId"], "queryType": "EQUALITY" }
+      ]
     }
-  },
-  "firestore": {
-    "users/{userId}": {
-      "schema": {
-        "$ref": "#/entities/User"
-      },
-      "description": "User profiles"
-    },
-    "products/{productId}": {
-      "schema": {
-        "$ref": "#/entities/Product"
-      },
-      "description": "Products listed in the marketplace"
-    },
-    "enquiries/{enquiryId}": {
-      "schema": {
-        "$ref": "#/entities/Enquiry"
-      },
-      "description": "Enquiries made by buyers"
-    }
-  }
+  ]
 }

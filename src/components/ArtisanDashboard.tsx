@@ -1,25 +1,28 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/firestore";
-import { auth, db, handleFirestoreError, OperationType } from "../lib/firebase";
+import { db, handleFirestoreError, OperationType } from "../lib/firebase";
+import { getMockUser, setMockUser } from "../lib/auth";
 
 export default function ArtisanDashboard() {
   const navigate = useNavigate();
   const [products, setProducts] = useState<any[]>([]);
   const [enquiries, setEnquiries] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<"products" | "enquiries">("products");
+  
+  const user = getMockUser();
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    if (!user) return;
     
     // Fetch Products
-    const qProducts = query(collection(db, "products"), where("artisanId", "==", auth.currentUser.uid));
+    const qProducts = query(collection(db, "products"), where("artisanId", "==", user.uid));
     const unsubProducts = onSnapshot(qProducts, (snapshot) => {
       setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => handleFirestoreError(error, OperationType.GET, "products"));
 
     // Fetch Enquiries
-    const qEnquiries = query(collection(db, "enquiries"), where("artisanId", "==", auth.currentUser.uid));
+    const qEnquiries = query(collection(db, "enquiries"), where("artisanId", "==", user.uid));
     const unsubEnquiries = onSnapshot(qEnquiries, (snapshot) => {
       setEnquiries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a: any, b: any) => b.createdAt - a.createdAt));
     }, (error) => handleFirestoreError(error, OperationType.GET, "enquiries"));
@@ -28,10 +31,11 @@ export default function ArtisanDashboard() {
       unsubProducts();
       unsubEnquiries();
     };
-  }, []);
+  }, [user]);
 
   const handleLogout = () => {
-    auth.signOut().then(() => navigate("/login"));
+    setMockUser(null);
+    navigate("/login");
   };
 
   const markEnquiryResponded = async (id: string) => {
@@ -47,7 +51,7 @@ export default function ArtisanDashboard() {
 
   return (
     <div className="flex flex-col flex-1 bg-surface pt-safe pb-28">
-      <header className="fixed top-0 w-full max-w-[480px] z-50 pt-safe bg-surface/80 backdrop-blur-xl shadow-sm border-x border-outline-variant/20">
+      <header className="fixed top-0 w-full max-w-7xl mx-auto z-50 pt-safe bg-surface/80 backdrop-blur-xl shadow-sm border-b border-outline-variant/20">
         <div className="h-16 px-gutter-mobile flex items-center justify-between">
           <div className="flex flex-col">
             <span className="font-headline-sm text-primary leading-tight tracking-tight">Craft Bridge</span>
@@ -56,11 +60,7 @@ export default function ArtisanDashboard() {
           <div className="flex items-center gap-space-xs">
              <button className="px-space-xs py-1 rounded-full bg-surface-container text-on-surface-variant font-label-sm">हिंदी / EN</button>
              <div className="w-8 h-8 rounded-full bg-surface-container overflow-hidden flex items-center justify-center text-on-surface-variant">
-               {auth.currentUser?.photoURL ? (
-                 <img src={auth.currentUser.photoURL} alt="Profile" className="w-full h-full object-cover" />
-               ) : (
                  <span className="material-symbols-outlined">person</span>
-               )}
              </div>
           </div>
         </div>
@@ -84,7 +84,7 @@ export default function ArtisanDashboard() {
           <div className="flex items-start justify-between">
             <div className="flex flex-col">
               <div className="flex items-center gap-space-xs">
-                <span className="font-headline-md text-primary font-bold">Namaste, {auth.currentUser?.displayName?.split(" ")[0] || "Artisan"}</span>
+                <span className="font-headline-md text-primary font-bold">Namaste, {user?.displayName?.split(" ")[0] || "Artisan"}</span>
                 <span className="px-space-xs py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm">नमस्ते</span>
               </div>
               <div className="flex items-center gap-1.5 mt-1 text-on-surface-variant font-body-sm">
@@ -219,7 +219,7 @@ export default function ArtisanDashboard() {
         </button>
       </div>
 
-      <nav className="fixed bottom-0 w-full max-w-[480px] z-40 pb-safe bg-surface/90 backdrop-blur shadow-[0_-2px_12px_rgba(0,0,0,0.04)] border-t border-outline-variant/20 border-x">
+      <nav className="fixed bottom-0 w-full max-w-7xl mx-auto z-40 pb-safe bg-surface/90 backdrop-blur shadow-[0_-2px_12px_rgba(0,0,0,0.04)] border-t border-outline-variant/20">
         <div className="flex justify-around items-center h-16 px-space-2xs">
           <button className="flex flex-col items-center justify-center text-primary p-2">
             <span className="material-symbols-outlined">cottage</span>

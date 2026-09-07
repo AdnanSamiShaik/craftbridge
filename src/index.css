@@ -81,7 +81,7 @@
     @apply bg-surface-container-low text-on-surface antialiased flex justify-center min-h-screen;
   }
   #root {
-    @apply w-full max-w-[480px] bg-surface min-h-screen shadow-2xl relative overflow-x-hidden border-x border-outline-variant/20 flex flex-col;
+    @apply w-full max-w-7xl mx-auto bg-surface min-h-screen shadow-lg relative flex flex-col;
   }
 }
 

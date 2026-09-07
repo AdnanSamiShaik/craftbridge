@@ -33,7 +33,7 @@ app.post("/api/ai/transcribe-catalog", upload.single("audio"), async (req, res) 
     const base64Audio = audioBuffer.toString("base64");
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-1.5-flash",
       contents: [
         {
           role: "user",
@@ -49,7 +49,7 @@ app.post("/api/ai/transcribe-catalog", upload.single("audio"), async (req, res) 
               Return a JSON object with:
               - transcription_original: string
               - language_detected: string
-              - product_name: string
+              - product_name_en: string\n              - product_name_hi: string
               - category: string
               - material: string
               - craft_technique: string
@@ -80,24 +80,74 @@ app.post("/api/ai/pricing", express.json(), async (req, res) => {
     // Deterministic base cost
     const baseCost = Number(raw_material_cost) + Number(labour_cost) + Number(packaging_cost);
     
-    // Simple mock logic for prototype, mimicking the example
-    const minMultiplier = 1.25;
-    const maxMultiplier = 1.6;
-    
-    const suggestedMinimum = Math.round(baseCost * minMultiplier);
-    const suggestedMaximum = Math.round(baseCost * maxMultiplier);
-    const recommended = Math.round(baseCost * 1.4);
-
-    res.json({
-      base_cost: baseCost,
-      suggested_minimum: suggestedMinimum,
-      suggested_maximum: suggestedMaximum,
-      recommended_starting_price: recommended,
-      explanation: `Calculated from Base Cost (₹${baseCost}) + Category Margin`
+    // Call Gemini for pricing insights
+    const response = await ai.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Suggest a pricing strategy for a handmade ${category} made of ${material} in India. The base cost is ₹${baseCost}. Return a JSON with: suggested_minimum (number), suggested_maximum (number), recommended_starting_price (number), and explanation (string).` }]
+        }
+      ],
+      config: { responseMimeType: "application/json" }
     });
-
+    
+    const result = JSON.parse(response.text || "{}");
+    result.base_cost = baseCost;
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: "Failed to calculate pricing" });
+  }
+});
+
+app.post("/api/ai/extract-requirements", express.json(), async (req, res) => {
+  try {
+    const { message } = req.body;
+    
+    const response = await ai.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Extract the following buyer requirements from this message: "${message}".
+          Return a JSON object with these keys (use null if not specified):
+          - product: string
+          - quantity: number
+          - budget: number
+          - location: string
+          - deadline: string
+          - custom_requirements: string
+          - is_bulk: boolean` }]
+        }
+      ],
+      config: { responseMimeType: "application/json" }
+    });
+    
+    const result = JSON.parse(response.text || "{}");
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to extract requirements" });
+  }
+});
+
+
+app.post("/api/ai/search-products", express.json(), async (req, res) => {
+  try {
+    const { message, products } = req.body;
+    const response = await ai.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Given the user query: "${message}", find the best matching products from this list: ${JSON.stringify(products)}. Return a JSON object with a key 'matched_ids' containing an array of string product IDs that best match.` }]
+        }
+      ],
+      config: { responseMimeType: "application/json" }
+    });
+    const result = JSON.parse(response.text || "{}");
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to search products" });
   }
 });
 

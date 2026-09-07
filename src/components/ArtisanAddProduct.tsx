@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { doc, setDoc } from "firebase/firestore";
-import { db, auth, handleFirestoreError, OperationType } from "../lib/firebase";
+import { db, handleFirestoreError, OperationType } from "../lib/firebase";
+import { getMockUser } from "../lib/auth";
 
 export default function ArtisanAddProduct() {
   const navigate = useNavigate();
@@ -9,6 +10,27 @@ export default function ArtisanAddProduct() {
   const [isRecording, setIsRecording] = useState(false);
   const [catalog, setCatalog] = useState<any>(null);
   const [price, setPrice] = useState(2199);
+  const [suggestedRange, setSuggestedRange] = useState("₹1,950 — ₹2,350");
+  const [recommendedPrice, setRecommendedPrice] = useState("₹2,199");
+  const [pricingLoading, setPricingLoading] = useState(false);
+  const generatePricing = async () => {
+    setPricingLoading(true);
+    try {
+      const res = await fetch("/api/ai/pricing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category: catalog?.category || "Handicraft", material: catalog?.material || "Clay", raw_material_cost: 500, labour_cost: 300, packaging_cost: 100 })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSuggestedRange("₹" + data.suggested_minimum + " — ₹" + data.suggested_maximum);
+        setRecommendedPrice("₹" + data.recommended_starting_price);
+        setPrice(data.recommended_starting_price);
+        setPayout(Math.round(data.recommended_starting_price * 0.795));
+      }
+    } catch(e) { console.error(e); }
+    setPricingLoading(false);
+  };
   const [payout, setPayout] = useState(1749);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isProcessingAI, setIsProcessingAI] = useState(false);
@@ -16,18 +38,80 @@ export default function ArtisanAddProduct() {
   
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
+  const [showLiveCamera, setShowLiveCamera] = useState(false);
+
+  const startLiveCamera = async () => {
+    try {
+      setShowLiveCamera(true);
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "environment" } 
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Camera access failed", err);
+      alert("Camera permission denied or not available.");
+      setShowLiveCamera(false);
+    }
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current) {
+      const canvas = document.createElement("canvas");
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext("2d");
+      ctx?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+      
+      // Stop tracks
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream?.getTracks().forEach(track => track.stop());
+      
+      setShowLiveCamera(false);
+      setImageBase64(dataUrl);
+      setStep(2);
+      processImageEnhancement(dataUrl);
+    }
+  };
+
+  const closeLiveCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+    }
+    setShowLiveCamera(false);
+  };
+
+  const processImageEnhancement = async (dataUrl: string) => {
+    setIsProcessingAI(true);
+    setProcessingStage("Removing background...");
+    try {
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const formData = new FormData();
+      formData.append("image", blob, "photo.jpg");
+      await fetch("/api/ai/image-enhance", {
+        method: "POST",
+        body: formData
+      });
+      setIsProcessingAI(false);
+    } catch (error) {
+      console.error("AI Image Enhance failed", error);
+      setIsProcessingAI(false);
+    }
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setStep(2); // Move to loading/preview step
-    setIsProcessingAI(true);
-    setProcessingStage("Removing background...");
-
+    
     // Create preview
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -56,22 +140,9 @@ export default function ArtisanAddProduct() {
         const ctx = canvas.getContext("2d");
         ctx?.drawImage(img, 0, 0, width, height);
         
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
         setImageBase64(dataUrl);
-
-        try {
-          const formData = new FormData();
-          formData.append("image", file);
-          await fetch("/api/ai/image-enhance", {
-            method: "POST",
-            body: formData
-          });
-          // After simulated backend processing, we proceed
-          setIsProcessingAI(false);
-        } catch (error) {
-          console.error("AI Image Enhance failed", error);
-          setIsProcessingAI(false);
-        }
+        processImageEnhancement(dataUrl);
       };
       img.src = event.target?.result as string;
     };
@@ -111,8 +182,8 @@ export default function ArtisanAddProduct() {
             const data = await res.json();
             
             setCatalog({
-              titleEn: data.product_name || "Handcrafted Product",
-              titleHi: data.titleHi || "हस्तशिल्प उत्पाद",
+              titleEn: data.product_name_en || "Handcrafted Product",
+              titleHi: data.product_name_hi || "हस्तशिल्प उत्पाद",
               desc: data.description || "A beautiful handcrafted item."
             });
           } catch (e) {
@@ -144,13 +215,14 @@ export default function ArtisanAddProduct() {
   };
 
   const publishProduct = async () => {
-    if (!auth.currentUser || !catalog) return;
+    const user = getMockUser();
+    if (!user || !catalog) return;
     setIsPublishing(true);
     try {
       const productId = crypto.randomUUID();
       await setDoc(doc(db, "products", productId), {
-        artisanId: auth.currentUser.uid,
-        artisanName: auth.currentUser.displayName || "Artisan",
+        artisanId: user.uid,
+        artisanName: user.displayName || "Artisan",
         titleEn: catalog.titleEn,
         titleHi: catalog.titleHi,
         desc: catalog.desc,
@@ -169,7 +241,7 @@ export default function ArtisanAddProduct() {
 
   return (
     <div className="flex flex-col flex-1 bg-surface pt-safe pb-28">
-      <header className="fixed top-0 w-full max-w-[480px] z-50 pt-safe bg-surface/90 backdrop-blur shadow-sm border-x border-outline-variant/20">
+      <header className="fixed top-0 w-full max-w-7xl mx-auto z-50 pt-safe bg-surface/90 backdrop-blur shadow-sm border-b border-outline-variant/20">
         <div className="h-16 px-gutter-mobile flex items-center gap-space-sm">
           <button onClick={() => step > 1 ? setStep(step - 1) : navigate(-1)} className="text-on-surface w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors">
             <span className="material-symbols-outlined text-[24px]">arrow_back</span>
@@ -190,42 +262,48 @@ export default function ArtisanAddProduct() {
       <main className="flex-1 w-full pt-20 flex flex-col">
         {step === 1 && (
           <div className="p-gutter-mobile flex flex-col gap-space-xl items-center justify-center h-[65vh]">
-            <div className="text-center">
-              <h2 className="font-display-lg text-primary text-4xl mb-2">Photo</h2>
-              <p className="font-title-md text-on-surface-variant">Let's start with a clear picture.</p>
-            </div>
-            
-            <input 
-              type="file" 
-              accept="image/*" 
-              ref={fileInputRef} 
-              onChange={handleImageUpload} 
-              className="hidden" 
-            />
-            
-            <input 
-              type="file" 
-              accept="image/*" 
-              capture="environment" 
-              ref={cameraInputRef} 
-              onChange={handleImageUpload} 
-              className="hidden" 
-            />
+            {showLiveCamera ? (
+              <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center">
+                <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                <div className="absolute bottom-10 left-0 right-0 flex justify-center items-center gap-8 px-8">
+                  <button onClick={closeLiveCamera} className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-white backdrop-blur">
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                  <button onClick={capturePhoto} className="w-20 h-20 rounded-full bg-white border-4 border-gray-300 flex items-center justify-center shadow-lg active:scale-95 transition-transform"></button>
+                  <div className="w-14 h-14"></div> {/* Placeholder to center the capture button */}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="text-center">
+                  <h2 className="font-display-lg text-primary text-4xl mb-2">Photo</h2>
+                  <p className="font-title-md text-on-surface-variant">Let's start with a clear picture.</p>
+                </div>
+                
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  ref={fileInputRef} 
+                  onChange={handleImageUpload} 
+                  className="hidden" 
+                />
 
-            <div className="grid grid-cols-2 gap-space-md w-full max-w-sm mx-auto">
-              <button onClick={() => cameraInputRef.current?.click()} className="h-36 bg-primary-fixed rounded-2xl flex flex-col items-center justify-center gap-3 text-on-primary-fixed shadow-md active:scale-[0.98] transition-transform">
-                 <span className="material-symbols-outlined text-[40px]">photo_camera</span>
-                 <span className="font-title-md font-bold">Camera</span>
-              </button>
-              <button onClick={() => fileInputRef.current?.click()} className="h-36 bg-surface-container rounded-2xl flex flex-col items-center justify-center gap-3 text-on-surface-variant shadow-sm border border-outline-variant/30 active:scale-[0.98] transition-transform">
-                 <span className="material-symbols-outlined text-[40px]">image</span>
-                 <span className="font-title-md font-bold">Gallery</span>
-              </button>
-            </div>
-            <div className="text-center text-on-surface-variant font-body-lg flex flex-col gap-2 bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/20 shadow-sm w-full max-w-sm">
-              <div className="flex items-center gap-2"><span className="material-symbols-outlined text-tertiary">check_circle</span> Use good daylight</div>
-              <div className="flex items-center gap-2"><span className="material-symbols-outlined text-tertiary">check_circle</span> Keep background plain</div>
-            </div>
+                <div className="grid grid-cols-2 gap-space-md w-full max-w-sm mx-auto">
+                  <button onClick={startLiveCamera} className="h-36 bg-primary-fixed rounded-2xl flex flex-col items-center justify-center gap-3 text-on-primary-fixed shadow-md active:scale-[0.98] transition-transform">
+                     <span className="material-symbols-outlined text-[40px]">photo_camera</span>
+                     <span className="font-title-md font-bold">Camera</span>
+                  </button>
+                  <button onClick={() => fileInputRef.current?.click()} className="h-36 bg-surface-container rounded-2xl flex flex-col items-center justify-center gap-3 text-on-surface-variant shadow-sm border border-outline-variant/30 active:scale-[0.98] transition-transform">
+                     <span className="material-symbols-outlined text-[40px]">image</span>
+                     <span className="font-title-md font-bold">Gallery</span>
+                  </button>
+                </div>
+                <div className="text-center text-on-surface-variant font-body-lg flex flex-col gap-2 bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/20 shadow-sm w-full max-w-sm">
+                  <div className="flex items-center gap-2"><span className="material-symbols-outlined text-tertiary">check_circle</span> Use good daylight</div>
+                  <div className="flex items-center gap-2"><span className="material-symbols-outlined text-tertiary">check_circle</span> Keep background plain</div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -244,7 +322,7 @@ export default function ArtisanAddProduct() {
                ) : (
                  <>
                    <div className="relative w-full rounded-xl overflow-hidden group">
-                     <img src={imageBase64 || ""} alt="Enhanced product" className="w-full max-h-96 object-contain bg-surface-container-low" />
+                     <img src={imageBase64 || undefined} alt="Enhanced product" className="w-full max-h-96 object-contain bg-surface-container-low" />
                      <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent flex items-end p-3 pointer-events-none">
                        <span className="text-white font-label-md flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">auto_awesome</span> Background removed</span>
                      </div>
@@ -329,7 +407,7 @@ export default function ArtisanAddProduct() {
                  </div>
                </div>
 
-               <button onClick={() => setStep(5)} className="w-full h-14 bg-primary text-on-primary rounded-xl font-title-md font-bold mt-6 shadow-md flex items-center justify-center gap-2">
+               <button onClick={() => { setStep(5); generatePricing(); }} className="w-full h-14 bg-primary text-on-primary rounded-xl font-title-md font-bold mt-6 shadow-md flex items-center justify-center gap-2">
                  Approve & Continue <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
                </button>
             </div>
@@ -343,7 +421,7 @@ export default function ArtisanAddProduct() {
              <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-md border border-outline-variant/20 flex flex-col gap-4">
                 <div className="text-center">
                   <span className="font-label-md text-on-surface-variant uppercase font-bold tracking-wider">Suggested Range</span>
-                  <p className="font-display-lg text-primary font-bold mt-1">₹1,950 — ₹2,350</p>
+                  <p className="font-display-lg text-primary font-bold mt-1">{pricingLoading ? "..." : suggestedRange}</p>
                 </div>
                 
                 <div className="p-4 bg-primary-fixed/20 rounded-xl flex items-center justify-between border border-primary/20">
@@ -353,7 +431,7 @@ export default function ArtisanAddProduct() {
                     </div>
                     <div>
                       <span className="font-label-md text-primary-fixed-dim font-bold block">Recommended Starting</span>
-                      <span className="font-headline-sm text-on-primary-fixed font-bold block leading-tight">₹2,199</span>
+                      <span className="font-headline-sm text-on-primary-fixed font-bold block leading-tight">{pricingLoading ? "..." : recommendedPrice}</span>
                     </div>
                   </div>
                 </div>
@@ -374,7 +452,7 @@ export default function ArtisanAddProduct() {
                 </div>
              </div>
 
-             <div className="fixed bottom-0 left-0 right-0 z-40 bg-surface/95 backdrop-blur-xl shadow-[0_-8px_30px_rgba(0,0,0,0.08)] px-gutter-mobile py-space-sm pb-safe flex gap-3 max-w-[480px] mx-auto border-t border-outline-variant/20 border-x">
+             <div className="fixed bottom-0 left-0 right-0 z-40 bg-surface/95 backdrop-blur-xl shadow-[0_-8px_30px_rgba(0,0,0,0.08)] px-gutter-mobile py-space-sm pb-safe flex gap-3 max-w-7xl mx-auto border-t border-outline-variant/20">
                <button onClick={() => setStep(4)} className="h-14 w-20 flex-shrink-0 bg-surface-container-high rounded-xl font-label-md font-bold flex items-center justify-center">
                  <span className="material-symbols-outlined">arrow_back</span>
                </button>
