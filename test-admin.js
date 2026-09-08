@@ -1,3 +1,7 @@
-const admin = require('firebase-admin');
-admin.initializeApp({ projectId: require('./firebase-applet-config.json').projectId });
-console.log('Admin initialized');
+import admin from 'firebase-admin';
+try {
+  admin.initializeApp();
+  console.log("Firebase Admin initialized");
+} catch (e) {
+  console.log("Error initializing:", e.message);
+}

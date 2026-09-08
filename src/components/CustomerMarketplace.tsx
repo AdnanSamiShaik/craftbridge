@@ -90,78 +90,79 @@ export default function CustomerMarketplace() {
   const [aiSearchLoading, setAiSearchLoading] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
-  const [extractedReqs, setExtractedReqs] = useState<any>(null);
 
+  const [chatHistory, setChatHistory] = useState<{role: string, message: string, products?: any[]}[]>([]);
+  const [interactionId, setInteractionId] = useState<string | null>(null);
   
-  const handleCustomerAiSearch = async () => {
-    if (!chatMessage.trim()) return;
-    setAiSearchLoading(true);
-    try {
-      const res = await fetch("/api/ai/search-products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: chatMessage, products: products })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.matched_ids && data.matched_ids.length > 0) {
-          // just show those products
-          setAiMatchedIds(data.matched_ids);
-          setShowChat(false);
-        } else {
-          alert("No matching products found.");
-        }
-      }
-    } catch(e) {
-      console.error(e);
-    }
-    setAiSearchLoading(false);
-  };
-
   const handleSendChat = async () => {
     if (!chatMessage.trim()) return;
+    const msg = chatMessage;
+    setChatMessage("");
+    setChatHistory(prev => [...prev, { role: "user", message: msg }]);
     setChatLoading(true);
+    
     try {
-      const res = await fetch("/api/ai/extract-requirements", {
+      const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: chatMessage })
+        body: JSON.stringify({ 
+          message: msg, 
+          previousInteractionId: interactionId,
+          user: user,
+          products: products
+        })
       });
       const data = await res.json();
-      setExtractedReqs(data);
+      
+      if (!res.ok) {
+        throw new Error(data.details || data.error || "Failed to process chat");
+      }
+      
+      setInteractionId(data.interactionId);
+      setChatHistory(prev => [...prev, { role: "assistant", message: data.message, products: data.products }]);
+      
+      if (data.action && data.action.type === "create_enquiry_batch") {
+        import("firebase/firestore").then(async ({ doc, setDoc, writeBatch }) => {
+          try {
+            const batch = writeBatch(db);
+            const payloads = data.action.payloads || [];
+            
+            payloads.forEach((payload: any) => {
+              const enquiryId = crypto.randomUUID();
+              const ref = doc(db, "enquiries", enquiryId);
+              batch.set(ref, {
+                buyerId: user?.uid,
+                buyerName: user?.displayName || "Buyer",
+                ...payload,
+                status: "pending",
+                source: "ai_chat",
+                createdAt: Date.now()
+              });
+            });
+            
+            await batch.commit();
+            alert(`Enquiry sent successfully to ${payloads.length} artisan(s)!`);
+          } catch (e) {
+            console.error("Firestore error", e);
+          }
+        });
+      }
+      
     } catch (e) {
       console.error(e);
+      if (String(e).includes('429') || String(e).toLowerCase().includes('quota')) {
+        setChatHistory(prev => [...prev, { role: "assistant", message: "I am receiving too many requests. Please wait a moment before trying again." }]);
+      } else {
+        setChatHistory(prev => [...prev, { role: "assistant", message: "Sorry, I encountered an error connecting to the server." }]);
+      }
     } finally {
       setChatLoading(false);
     }
   };
 
-  const confirmEnquiry = async () => {
-    import("firebase/firestore").then(async ({ doc, setDoc }) => {
-      if (!extractedReqs || !user) return;
-      try {
-        const enquiryId = crypto.randomUUID();
-        await setDoc(doc(db, "enquiries", enquiryId), {
-          buyerId: user.uid,
-          buyerName: user.displayName || "Buyer",
-          productName: extractedReqs.product || "Unknown Product",
-          quantity: extractedReqs.quantity || 1,
-          budget: extractedReqs.budget || null,
-          location: extractedReqs.location || null,
-          message: extractedReqs.custom_requirements || chatMessage,
-          status: "pending",
-          isBulk: extractedReqs.is_bulk || false,
-          createdAt: Date.now()
-        });
-        alert("Enquiry broadcasted to relevant artisans!");
-        setShowChat(false);
-        setExtractedReqs(null);
-        setChatMessage("");
-      } catch (error) {
-        console.error(error);
-      }
-    });
-  };
+
+  
+
 
   return (
     <div className="flex flex-col flex-1 bg-surface pt-safe pb-28">
@@ -294,63 +295,73 @@ export default function CustomerMarketplace() {
                  </h3>
                  <p className="font-body-sm text-on-surface-variant">Describe your bulk requirements</p>
                </div>
-               <button onClick={() => {setShowChat(false); setExtractedReqs(null);}} className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+               <button onClick={() => {setShowChat(false); setChatHistory([]); setInteractionId(null);}} className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
                  <span className="material-symbols-outlined">close</span>
                </button>
             </div>
 
             
-            {isBuyer ? (
-            extractedReqs ? (
-              <div className="flex flex-col gap-4">
-                <div className="p-4 bg-primary-fixed/20 rounded-xl border border-primary/20">
-                  <h4 className="font-title-md font-bold mb-2">Requirement Summary</h4>
-                  <ul className="font-body-md flex flex-col gap-1">
-                    <li><strong>Product:</strong> {extractedReqs.product || "Not specified"}</li>
-                    <li><strong>Quantity:</strong> {extractedReqs.quantity || "Not specified"}</li>
-                    <li><strong>Budget:</strong> {extractedReqs.budget ? `₹${extractedReqs.budget}` : "Not specified"}</li>
-                    <li><strong>Location:</strong> {extractedReqs.location || "Not specified"}</li>
-                  </ul>
-                  <p className="mt-2 text-sm italic border-t border-primary/20 pt-2">{extractedReqs.custom_requirements || "No custom details"}</p>
+            
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 max-h-[60vh]">
+              {chatHistory.length === 0 && (
+                <div className="text-center text-on-surface-variant my-8">
+                  <span className="material-symbols-outlined text-[48px] mb-4 opacity-50">smart_toy</span>
+                  <p>Hi! I'm your Sourcing Assistant.</p>
+                  <p className="text-sm">I can help you find products or request quotes.</p>
                 </div>
-                <button onClick={confirmEnquiry} className="h-14 bg-primary text-on-primary rounded-xl font-title-md font-bold shadow-md">
-                  Broadcast to Artisans
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-4">
-                <textarea 
+              )}
+              {chatHistory.map((chat, idx) => (
+                <div key={idx} className={`flex flex-col gap-2 ${chat.role === 'user' ? 'items-end' : 'items-start'}`}>
+                  <div className={`p-3 rounded-2xl max-w-[85%] ${chat.role === 'user' ? 'bg-primary text-on-primary rounded-tr-sm' : 'bg-surface-container text-on-surface rounded-tl-sm'}`}>
+                    {chat.message}
+                  </div>
+                  {chat.products && chat.products.length > 0 && (
+                    <div className="w-full flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x">
+                      {chat.products.map(p => (
+                        <div key={p.id} onClick={() => { setShowChat(false); navigate(`/customer/product/${p.id}`); }} className="min-w-[140px] max-w-[140px] bg-surface rounded-xl overflow-hidden shadow-sm border border-outline-variant/30 shrink-0 cursor-pointer snap-start">
+                          <img src={p.imageUrl || "https://placehold.co/400?text=No+Image"} className="w-full h-24 object-cover" />
+                          <div className="p-2">
+                            <p className="text-xs font-bold truncate">{p.titleEn}</p>
+                            <p className="text-[10px] text-on-surface-variant truncate">{p.artisanName}</p>
+                            <p className="text-xs font-bold text-primary mt-1">₹{p.price}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {chatLoading && (
+                <div className="flex items-start gap-2">
+                  <div className="p-4 bg-surface-container rounded-2xl rounded-tl-sm flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{animationDelay: '0ms'}}></span>
+                    <span className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{animationDelay: '150ms'}}></span>
+                    <span className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{animationDelay: '300ms'}}></span>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 border-t border-outline-variant/20 bg-surface">
+              <div className="flex gap-2">
+                <input 
+                  type="text"
                   value={chatMessage}
                   onChange={e => setChatMessage(e.target.value)}
-                  placeholder="e.g., I need 500 handmade baskets under ₹2 lakh for Hyderabad by next month."
-                  className="p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 focus:border-[#7b4dff] focus:ring-2 focus:ring-[#7b4dff]/20 outline-none font-body-lg min-h-[140px] resize-none shadow-inner transition-all"
+                  onKeyDown={e => e.key === 'Enter' && handleSendChat()}
+                  placeholder={isBuyer ? "I need 500 baskets..." : "Find me a terracotta vase..."}
+                  className="flex-1 p-4 rounded-full bg-surface-container-lowest border border-outline-variant/30 focus:border-[#7b4dff] focus:ring-1 outline-none font-body-lg shadow-inner"
                 />
                 <button 
                   onClick={handleSendChat}
                   disabled={chatLoading}
-                  className="h-14 bg-gradient-to-r from-primary to-[#7b4dff] text-white rounded-2xl font-title-md font-bold shadow-[0_4px_14px_rgba(123,77,255,0.3)] hover:shadow-[0_6px_20px_rgba(123,77,255,0.4)] hover:scale-[1.02] active:scale-95 transition-all duration-200 flex items-center justify-center gap-2"
+                  className="w-14 h-14 shrink-0 rounded-full bg-gradient-to-tr from-primary to-[#7b4dff] text-white flex items-center justify-center shadow-md active:scale-95 transition-transform"
                 >
-                  {chatLoading ? <span className="material-symbols-outlined animate-spin">sync</span> : <>Extract Requirements <span className="material-symbols-outlined">auto_awesome</span></>}
+                  <span className="material-symbols-outlined">send</span>
                 </button>
               </div>
-            )
-            ) : (
-              <div className="flex flex-col gap-4">
-                <textarea 
-                  value={chatMessage}
-                  onChange={e => setChatMessage(e.target.value)}
-                  placeholder="e.g., Find me a red terracotta vase under ₹2000"
-                  className="p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 focus:border-[#7b4dff] focus:ring-2 focus:ring-[#7b4dff]/20 outline-none font-body-lg min-h-[140px] resize-none shadow-inner transition-all"
-                />
-                <button 
-                  onClick={handleCustomerAiSearch}
-                  disabled={aiSearchLoading}
-                  className="h-14 bg-gradient-to-r from-primary to-[#7b4dff] text-white rounded-2xl font-title-md font-bold shadow-[0_4px_14px_rgba(123,77,255,0.3)] hover:shadow-[0_6px_20px_rgba(123,77,255,0.4)] hover:scale-[1.02] active:scale-95 transition-all duration-200 flex items-center justify-center gap-2"
-                >
-                  {aiSearchLoading ? <span className="material-symbols-outlined animate-spin">sync</span> : <>Search Product <span className="material-symbols-outlined">search</span></>}
-                </button>
-              </div>
-            )}
+            </div>
+
 
           </div>
         </div>
