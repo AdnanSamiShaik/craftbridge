@@ -1,18 +1,18 @@
 import express from "express";
 import path from "path";
 import multer from "multer";
-import { GoogleGenAI } from "@google/genai";
+import { ai } from "./src/lib/gemini.js";
 import { createServer as createViteServer } from "vite";
 
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Gemini setup
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
 
 // API Routes
 app.post("/api/ai/image-enhance", upload.single("image"), async (req, res) => {
@@ -73,7 +73,7 @@ app.post("/api/ai/transcribe-catalog", upload.single("audio"), async (req, res) 
   }
 });
 
-app.post("/api/ai/pricing", express.json(), async (req, res) => {
+app.post("/api/ai/pricing", express.json({ limit: '50mb' }), async (req, res) => {
   try {
     const { category, material, raw_material_cost, labour_cost, packaging_cost } = req.body;
     
@@ -100,7 +100,7 @@ app.post("/api/ai/pricing", express.json(), async (req, res) => {
   }
 });
 
-app.post("/api/ai/extract-requirements", express.json(), async (req, res) => {
+app.post("/api/ai/extract-requirements", express.json({ limit: '50mb' }), async (req, res) => {
   try {
     const { message } = req.body;
     
@@ -131,7 +131,7 @@ app.post("/api/ai/extract-requirements", express.json(), async (req, res) => {
 });
 
 
-app.post("/api/ai/search-products", express.json(), async (req, res) => {
+app.post("/api/ai/search-products", express.json({ limit: '50mb' }), async (req, res) => {
   try {
     const { message, products } = req.body;
     const response = await ai.models.generateContent({

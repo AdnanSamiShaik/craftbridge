@@ -219,9 +219,9 @@ export default function CustomerMarketplace() {
            ) : (
              <div className="grid grid-cols-2 gap-space-sm">
                 {filteredProducts.map(product => (
-                  <div key={product.id} onClick={() => navigate(`/customer/product/${product.id}`)} className="w-full bg-surface-container-lowest rounded-2xl overflow-hidden shadow-sm flex flex-col cursor-pointer border border-outline-variant/30 hover:shadow-md transition-shadow">
+                  <div key={product.id} onClick={() => navigate(`/customer/product/${product.id}`)} className="w-full bg-surface-container-lowest rounded-2xl overflow-hidden shadow-sm flex flex-col cursor-pointer border border-outline-variant/30 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
                      <div className="relative h-44">
-                       <img src={product.imageUrl || "https://placehold.co/400?text=No+Image"} alt={product.titleEn} className="w-full h-full object-cover" />
+                       <img src={product.imageUrl || "https://placehold.co/400?text=No+Image"} alt={product.titleEn} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                        <div className="absolute top-2 left-2 px-2.5 py-1 rounded-full bg-surface-container-lowest/95 backdrop-blur text-tertiary font-label-sm text-[10px] font-bold shadow-sm flex items-center gap-1">
                          <span className="material-symbols-outlined text-[12px]">verified</span> {product.score || 95} Score
                        </div>
@@ -251,10 +251,10 @@ export default function CustomerMarketplace() {
         </div>
       </main>
 
-      <nav className="fixed bottom-0 w-full max-w-7xl mx-auto z-40 pb-safe bg-surface/95 backdrop-blur-md shadow-[0_-4px_20px_rgba(0,0,0,0.06)] border-t border-outline-variant/20">
+      <nav className="fixed bottom-0 w-full max-w-7xl mx-auto z-40 pb-safe bg-surface/80 backdrop-blur-xl shadow-[0_-8px_30px_rgba(0,0,0,0.04)] border-t border-outline-variant/30">
         <div className="flex justify-around items-center h-[72px] px-2 relative">
           
-          <button className="flex flex-col items-center justify-center text-primary p-2 w-16">
+          <button className="flex flex-col items-center justify-center text-primary p-2 w-16 hover:scale-105 transition-transform duration-200">
             <span className="material-symbols-outlined text-[28px] mb-1">home</span>
             <span className="font-label-sm text-[11px] font-bold">Home</span>
           </button>
@@ -267,9 +267,9 @@ export default function CustomerMarketplace() {
           {/* Floating Chat Button for Buyers */}
           <button 
             onClick={() => setShowChat(true)}
-            className="absolute -top-6 left-1/2 -translate-x-1/2 w-16 h-16 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform border-4 border-surface"
+            className="absolute -top-6 left-1/2 -translate-x-1/2 w-16 h-16 bg-gradient-to-tr from-primary to-[#7b4dff] text-white rounded-full shadow-[0_8px_20px_rgba(123,77,255,0.3)] flex items-center justify-center active:scale-95 hover:scale-105 hover:shadow-[0_12px_24px_rgba(123,77,255,0.4)] transition-all duration-300 border-4 border-surface"
           >
-            <span className="material-symbols-outlined text-[28px]">smart_toy</span>
+            <span className="material-symbols-outlined text-[28px] animate-pulse">auto_awesome</span>
           </button>
 
           <button className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors p-2 w-16">
@@ -286,7 +286,7 @@ export default function CustomerMarketplace() {
       {/* AI Chatbot Modal for Buyers */}
       {showChat && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-gutter-mobile w-full max-w-7xl mx-auto pointer-events-auto">
-          <div className="bg-surface w-full max-w-md sm:rounded-3xl rounded-t-3xl p-gutter-mobile pb-safe shadow-2xl flex flex-col animate-in slide-in-from-bottom-8 duration-300">
+          <div className="bg-surface w-full max-w-md sm:rounded-3xl rounded-t-3xl p-gutter-mobile pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.1)] flex flex-col animate-in slide-in-from-bottom-8 duration-300 border border-outline-variant/10">
             <div className="flex items-center justify-between mb-4 border-b border-outline-variant/20 pb-4">
                <div>
                  <h3 className="font-headline-sm font-bold text-on-surface flex items-center gap-2">
@@ -323,12 +323,12 @@ export default function CustomerMarketplace() {
                   value={chatMessage}
                   onChange={e => setChatMessage(e.target.value)}
                   placeholder="e.g., I need 500 handmade baskets under ₹2 lakh for Hyderabad by next month."
-                  className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/50 focus:border-primary focus:ring-1 outline-none font-body-lg min-h-[120px] resize-none"
+                  className="p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 focus:border-[#7b4dff] focus:ring-2 focus:ring-[#7b4dff]/20 outline-none font-body-lg min-h-[140px] resize-none shadow-inner transition-all"
                 />
                 <button 
                   onClick={handleSendChat}
                   disabled={chatLoading}
-                  className="h-14 bg-primary text-on-primary rounded-xl font-title-md font-bold shadow-md flex items-center justify-center gap-2"
+                  className="h-14 bg-gradient-to-r from-primary to-[#7b4dff] text-white rounded-2xl font-title-md font-bold shadow-[0_4px_14px_rgba(123,77,255,0.3)] hover:shadow-[0_6px_20px_rgba(123,77,255,0.4)] hover:scale-[1.02] active:scale-95 transition-all duration-200 flex items-center justify-center gap-2"
                 >
                   {chatLoading ? <span className="material-symbols-outlined animate-spin">sync</span> : <>Extract Requirements <span className="material-symbols-outlined">auto_awesome</span></>}
                 </button>
@@ -340,12 +340,12 @@ export default function CustomerMarketplace() {
                   value={chatMessage}
                   onChange={e => setChatMessage(e.target.value)}
                   placeholder="e.g., Find me a red terracotta vase under ₹2000"
-                  className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/50 focus:border-primary focus:ring-1 outline-none font-body-lg min-h-[120px] resize-none"
+                  className="p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 focus:border-[#7b4dff] focus:ring-2 focus:ring-[#7b4dff]/20 outline-none font-body-lg min-h-[140px] resize-none shadow-inner transition-all"
                 />
                 <button 
                   onClick={handleCustomerAiSearch}
                   disabled={aiSearchLoading}
-                  className="h-14 bg-primary text-on-primary rounded-xl font-title-md font-bold shadow-md flex items-center justify-center gap-2"
+                  className="h-14 bg-gradient-to-r from-primary to-[#7b4dff] text-white rounded-2xl font-title-md font-bold shadow-[0_4px_14px_rgba(123,77,255,0.3)] hover:shadow-[0_6px_20px_rgba(123,77,255,0.4)] hover:scale-[1.02] active:scale-95 transition-all duration-200 flex items-center justify-center gap-2"
                 >
                   {aiSearchLoading ? <span className="material-symbols-outlined animate-spin">sync</span> : <>Search Product <span className="material-symbols-outlined">search</span></>}
                 </button>
@@ -374,12 +374,12 @@ export default function CustomerMarketplace() {
                 value={orderAddress}
                 onChange={e => setOrderAddress(e.target.value)}
                 placeholder="Enter your full delivery address..."
-                className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/50 focus:border-primary focus:ring-1 outline-none font-body-lg min-h-[120px] resize-none"
+                className="p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 focus:border-[#7b4dff] focus:ring-2 focus:ring-[#7b4dff]/20 outline-none font-body-lg min-h-[140px] resize-none shadow-inner transition-all"
               />
               <button 
                 onClick={handlePlaceOrder}
                 disabled={orderLoading}
-                className="h-14 bg-primary text-on-primary rounded-xl font-title-md font-bold shadow-md flex items-center justify-center gap-2"
+                className="h-14 bg-gradient-to-r from-primary to-[#7b4dff] text-white rounded-2xl font-title-md font-bold shadow-[0_4px_14px_rgba(123,77,255,0.3)] hover:shadow-[0_6px_20px_rgba(123,77,255,0.4)] hover:scale-[1.02] active:scale-95 transition-all duration-200 flex items-center justify-center gap-2"
               >
                 {orderLoading ? <span className="material-symbols-outlined animate-spin">sync</span> : <>Confirm Order (₹{selectedProductForOrder.price})</>}
               </button>
